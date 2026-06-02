@@ -1,0 +1,24 @@
+{
+  "name": "operator",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix app\" \"npm run dev --prefix api\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nickmelamed/operator.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/nickmelamed/operator/issues"
+  },
+  "homepage": "https://github.com/nickmelamed/operator#readme",
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
+}

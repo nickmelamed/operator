@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+app/node_modules/
+api/node_modules/
+
+# Environment variables
+api/.env
+.env
+.env.local
+.env.*.local
+
+# Build output
+app/dist/
+app/build/
+
+# Vite
+app/.vite/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
