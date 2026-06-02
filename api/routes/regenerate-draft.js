@@ -9,7 +9,7 @@ router.post("/", async (req, res) => {
     const { signalSummary, channel, originalDraft, contact } = req.body;
 
     const response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 400,
       system: `You are drafting a business communication for a small business owner.
 Write a fresh version of the provided message — same intent, different wording.

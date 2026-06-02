@@ -9,7 +9,7 @@ router.post("/", async (req, res) => {
     const { to, subject, body } = req.body;
 
     const response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 500,
       system:
         "You are a mail-sending assistant. Use the Gmail tool to send exactly the email provided. Do not modify the content. Do not add any additional commentary.",

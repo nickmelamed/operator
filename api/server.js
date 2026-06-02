@@ -1,12 +1,10 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import analyzeRoute from "./routes/analyze.js";
 import sendEmailRoute from "./routes/send-email.js";
 import sendSlackRoute from "./routes/send-slack.js";
 import regenerateDraftRoute from "./routes/regenerate-draft.js";
-
-dotenv.config();
 
 const app = express();
 app.use(cors({ origin: "http://localhost:5173" }));
