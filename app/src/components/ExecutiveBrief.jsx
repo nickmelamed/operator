@@ -28,11 +28,11 @@ function SkeletonAction() {
 }
 
 const ExecutiveBrief = forwardRef(function ExecutiveBrief(
-  { mode = "demo", onAddToastRef, customInputRef },
+  { mode = "demo", onFetchStatus, onAddToastRef, customInputRef },
   ref
 ) {
   const { signals, actions, loading, error, refreshWithData, sendAction, updateDraft, regenerateDraft } =
-    useOperationsBrief(mode);
+    useOperationsBrief(mode, { onFetchStatus });
   const [customText, setCustomText] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
 

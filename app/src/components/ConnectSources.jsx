@@ -1,6 +1,6 @@
 const API = "http://localhost:3001";
 
-function SourceCard({ name, description, connected, alwaysAvailable, onConnect }) {
+function SourceCard({ name, description, connected, alwaysAvailable, onConnect, onDisconnect }) {
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 flex items-center justify-between gap-4">
       <div className="min-w-0">
@@ -12,10 +12,18 @@ function SourceCard({ name, description, connected, alwaysAvailable, onConnect }
           Always on
         </span>
       ) : connected ? (
-        <span className="shrink-0 flex items-center gap-1.5 text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-          Connected
-        </span>
+        <div className="shrink-0 flex items-center gap-3">
+          <span className="flex items-center gap-1.5 text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+            Connected
+          </span>
+          <button
+            onClick={onDisconnect}
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            Disconnect
+          </button>
+        </div>
       ) : (
         <button
           onClick={onConnect}
@@ -28,12 +36,17 @@ function SourceCard({ name, description, connected, alwaysAvailable, onConnect }
   );
 }
 
-export default function ConnectSources({ connectionStatus, onRunScan }) {
+export default function ConnectSources({ connectionStatus, onRunScan, onConnectionChange }) {
   const { google: googleConnected, slack: slackConnected } = connectionStatus;
   const anyConnected = googleConnected || slackConnected;
 
+  const handleDisconnect = async (provider) => {
+    await fetch(`${API}/api/auth/${provider}/disconnect`, { credentials: "include" });
+    onConnectionChange?.();
+  };
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-[400px] gap-8 max-w-md mx-auto">
+    <div className="flex flex-col items-center justify-center min-h-100 gap-8 max-w-md mx-auto">
       <div className="text-center">
         <h2 className="text-xl font-semibold text-zinc-100 mb-2">
           Connect your data sources
@@ -48,17 +61,15 @@ export default function ConnectSources({ connectionStatus, onRunScan }) {
           name="Gmail"
           description="Scan the last 50 email threads"
           connected={googleConnected}
-          onConnect={() => {
-            window.location.href = `${API}/api/auth/google`;
-          }}
+          onConnect={() => { window.location.href = `${API}/api/auth/google`; }}
+          onDisconnect={() => handleDisconnect("google")}
         />
         <SourceCard
           name="Slack"
           description="Scan channels from the last 7 days"
           connected={slackConnected}
-          onConnect={() => {
-            window.location.href = `${API}/api/auth/slack`;
-          }}
+          onConnect={() => { window.location.href = `${API}/api/auth/slack`; }}
+          onDisconnect={() => handleDisconnect("slack")}
         />
         <SourceCard
           name="Manual input"

@@ -47,22 +47,32 @@ router.post("/", async (req, res) => {
     const { messages = [], customData, mode = "demo" } = req.body;
 
     let allMessages = [...messages];
+    const fetchStatus = { gmail: "skipped", slack: "skipped" };
 
     if (mode === "live") {
       const [gmailResult, slackResult] = await Promise.allSettled([
         req.session?.googleTokens
           ? fetchGmailMessages(req.session.googleTokens, req.session)
-          : Promise.resolve([]),
+          : Promise.resolve(null),
         req.session?.slackToken
           ? fetchSlackMessages(req.session.slackToken)
-          : Promise.resolve([]),
+          : Promise.resolve(null),
       ]);
 
-      if (gmailResult.status === "fulfilled") {
+      if (gmailResult.status === "fulfilled" && gmailResult.value !== null) {
         allMessages = [...allMessages, ...gmailResult.value];
+        fetchStatus.gmail = "ok";
+      } else if (gmailResult.status === "rejected") {
+        fetchStatus.gmail = "failed";
+        console.error("Gmail fetch failed:", gmailResult.reason);
       }
-      if (slackResult.status === "fulfilled") {
+
+      if (slackResult.status === "fulfilled" && slackResult.value !== null) {
         allMessages = [...allMessages, ...slackResult.value];
+        fetchStatus.slack = "ok";
+      } else if (slackResult.status === "rejected") {
+        fetchStatus.slack = "failed";
+        console.error("Slack fetch failed:", slackResult.reason);
       }
     }
 
@@ -71,7 +81,7 @@ router.post("/", async (req, res) => {
     }
 
     if (allMessages.length === 0) {
-      return res.json({ signals: [], actions: [] });
+      return res.json({ signals: [], actions: [], fetchStatus });
     }
 
     const userContent = JSON.stringify(allMessages, null, 2);
@@ -93,7 +103,11 @@ router.post("/", async (req, res) => {
     raw = raw.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
 
     const parsed = JSON.parse(raw);
-    res.json(parsed);
+    res.json({
+      signals: parsed.signals || [],
+      actions: parsed.actions || [],
+      ...(mode === "live" && { fetchStatus }),
+    });
   } catch (err) {
     console.error("Analyze error:", err);
     res.status(500).send(err.message || "Failed to analyze messages");

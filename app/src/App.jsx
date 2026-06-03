@@ -39,6 +39,12 @@ function SourcePill({ label, dot, children, onClick }) {
   );
 }
 
+function sourceDot(connected, fetchResult) {
+  if (!connected) return "bg-zinc-500";
+  if (fetchResult === "failed") return "bg-amber-400";
+  return "bg-green-400";
+}
+
 export default function App() {
   const briefRef = useRef(null);
   const customInputRef = useRef(null);
@@ -46,6 +52,7 @@ export default function App() {
 
   const [mode, setMode] = useState("demo");
   const [connectionStatus, setConnectionStatus] = useState({ google: false, slack: false });
+  const [fetchStatus, setFetchStatus] = useState({ gmail: null, slack: null });
   const [liveScanned, setLiveScanned] = useState(false);
 
   const fetchConnectionStatus = useCallback(async () => {
@@ -88,9 +95,16 @@ export default function App() {
 
   const switchMode = (newMode) => {
     if (newMode === mode) return;
-    if (newMode === "demo") setLiveScanned(false);
+    if (newMode === "demo") {
+      setLiveScanned(false);
+      setFetchStatus({ gmail: null, slack: null });
+    }
     setMode(newMode);
   };
+
+  const handleFetchStatus = useCallback((status) => {
+    setFetchStatus(status);
+  }, []);
 
   const handleManualClick = () => {
     customInputRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -104,10 +118,14 @@ export default function App() {
   };
 
   const gmailDot =
-    mode === "demo" || connectionStatus.google ? "bg-green-400" : "bg-zinc-500";
+    mode === "demo"
+      ? "bg-green-400"
+      : sourceDot(connectionStatus.google, fetchStatus.gmail);
 
   const slackDot =
-    mode === "demo" || connectionStatus.slack ? "bg-green-400" : "bg-zinc-500";
+    mode === "demo"
+      ? "bg-green-400"
+      : sourceDot(connectionStatus.slack, fetchStatus.slack);
 
   const showConnectSources = mode === "live" && !liveScanned;
 
@@ -158,7 +176,11 @@ export default function App() {
                 ))}
               </>
             ) : connectionStatus.google ? (
-              <p className="text-xs text-zinc-300 px-1">Connected</p>
+              fetchStatus.gmail === "failed" ? (
+                <p className="text-xs text-amber-400 px-1">Connected — last fetch failed</p>
+              ) : (
+                <p className="text-xs text-zinc-300 px-1">Connected</p>
+              )
             ) : (
               <p className="text-xs text-zinc-500 px-1">
                 Not connected.{" "}
@@ -180,7 +202,11 @@ export default function App() {
                 ))}
               </>
             ) : connectionStatus.slack ? (
-              <p className="text-xs text-zinc-300 px-1">Connected</p>
+              fetchStatus.slack === "failed" ? (
+                <p className="text-xs text-amber-400 px-1">Connected — last fetch failed</p>
+              ) : (
+                <p className="text-xs text-zinc-300 px-1">Connected</p>
+              )
             ) : (
               <p className="text-xs text-zinc-500 px-1">
                 Not connected.{" "}
@@ -208,11 +234,13 @@ export default function App() {
           <ConnectSources
             connectionStatus={connectionStatus}
             onRunScan={() => setLiveScanned(true)}
+            onConnectionChange={fetchConnectionStatus}
           />
         ) : (
           <ExecutiveBrief
             ref={briefRef}
             mode={mode}
+            onFetchStatus={handleFetchStatus}
             onAddToastRef={onAddToastRef}
             customInputRef={customInputRef}
           />

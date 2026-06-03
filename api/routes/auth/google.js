@@ -37,6 +37,11 @@ router.get("/callback", async (req, res) => {
   }
 });
 
+router.get("/disconnect", (req, res) => {
+  delete req.session.googleTokens;
+  res.json({ success: true });
+});
+
 router.get("/status", (req, res) => {
   res.json({ connected: !!req.session.googleTokens });
 });

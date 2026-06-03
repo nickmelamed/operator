@@ -3,7 +3,7 @@ import scenarioMessages from "../data/scenario.js";
 
 const API = "http://localhost:3001";
 
-export function useOperationsBrief(mode = "demo") {
+export function useOperationsBrief(mode = "demo", { onFetchStatus } = {}) {
   const [signals, setSignals] = useState([]);
   const [actions, setActions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -71,6 +71,10 @@ export function useOperationsBrief(mode = "demo") {
         const msgs = mode === "demo" ? scenarioMessages : [];
         const data = await runAnalyze(msgs, customText || undefined);
 
+        if (mode === "live" && data.fetchStatus && onFetchStatus) {
+          onFetchStatus(data.fetchStatus);
+        }
+
         const newSignals = (data.signals || []).map((s) =>
           customText ? { ...s, source: "manual" } : s
         );
@@ -99,7 +103,7 @@ export function useOperationsBrief(mode = "demo") {
         setLoading(false);
       }
     },
-    [mode, runAnalyze]
+    [mode, runAnalyze, onFetchStatus]
   );
 
   const sendAction = useCallback(async (action) => {
