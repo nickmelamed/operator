@@ -1,5 +1,7 @@
 import express from "express";
 import Anthropic from "@anthropic-ai/sdk";
+import { fetchGmailMessages } from "../lib/gmail.js";
+import { fetchSlackMessages } from "../lib/slack.js";
 
 const router = express.Router();
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -11,15 +13,65 @@ Rules:
 - Write signal titles in plain English. No jargon. Bad: "Commitment deviation detected". Good: "Proposal overdue — Acme Corp".
 - Write summaries as if you are a trusted advisor, not a system. Bad: "Email thread indicates pricing not delivered per commitment". Good: "You promised pricing by Friday. It's Monday and they've followed up once with no reply."
 - For action drafts, write in first person as the business owner. Warm but professional. Do not start with "I hope this email finds you well." Get to the point in the first sentence.
-- Return ONLY valid JSON. No preamble, no markdown fences, no explanation.`;
+- For each signal, set "source" to match the source field of the message(s) that produced it: "gmail", "slack", or "manual". If a signal spans both gmail and slack messages, use whichever is the primary source.
+- Return ONLY valid JSON. No preamble, no markdown fences, no explanation.
+
+Return this exact shape:
+{
+  "signals": [
+    {
+      "id": "signal-1",
+      "title": "string",
+      "summary": "string",
+      "type": "risk" | "urgency" | "blocker" | "opportunity",
+      "age": "string, e.g. '3 days old'",
+      "source": "gmail" | "slack" | "manual",
+      "relatedContact": "string or null"
+    }
+  ],
+  "actions": [
+    {
+      "id": "action-1",
+      "signalId": "signal-1",
+      "label": "string",
+      "channel": "gmail" | "slack",
+      "to": "string",
+      "subject": "string or null",
+      "draft": "string"
+    }
+  ]
+}`;
 
 router.post("/", async (req, res) => {
   try {
-    const { messages = [], customData } = req.body;
+    const { messages = [], customData, mode = "demo" } = req.body;
 
-    const allMessages = [...messages];
+    let allMessages = [...messages];
+
+    if (mode === "live") {
+      const [gmailResult, slackResult] = await Promise.allSettled([
+        req.session?.googleTokens
+          ? fetchGmailMessages(req.session.googleTokens, req.session)
+          : Promise.resolve([]),
+        req.session?.slackToken
+          ? fetchSlackMessages(req.session.slackToken)
+          : Promise.resolve([]),
+      ]);
+
+      if (gmailResult.status === "fulfilled") {
+        allMessages = [...allMessages, ...gmailResult.value];
+      }
+      if (slackResult.status === "fulfilled") {
+        allMessages = [...allMessages, ...slackResult.value];
+      }
+    }
+
     if (customData) {
       allMessages.push({ source: "manual", body: customData });
+    }
+
+    if (allMessages.length === 0) {
+      return res.json({ signals: [], actions: [] });
     }
 
     const userContent = JSON.stringify(allMessages, null, 2);

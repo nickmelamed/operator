@@ -1,9 +1,11 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import ExecutiveBrief from "./components/ExecutiveBrief.jsx";
+import ConnectSources from "./components/ConnectSources.jsx";
 import ToastStack from "./components/ToastStack.jsx";
-import messages, { meta } from "./data/scenario.js";
+import messages from "./data/scenario.js";
 
-// Recent subjects/channels from scenario for sidebar popovers
+const API = "http://localhost:3001";
+
 const recentEmails = messages
   .filter((m) => m.source === "gmail" && m.subject)
   .slice(-3)
@@ -42,6 +44,54 @@ export default function App() {
   const customInputRef = useRef(null);
   const onAddToastRef = useRef(null);
 
+  const [mode, setMode] = useState("demo");
+  const [connectionStatus, setConnectionStatus] = useState({ google: false, slack: false });
+  const [liveScanned, setLiveScanned] = useState(false);
+
+  const fetchConnectionStatus = useCallback(async () => {
+    try {
+      const [google, slack] = await Promise.all([
+        fetch(`${API}/api/auth/google/status`, { credentials: "include" }).then((r) => r.json()),
+        fetch(`${API}/api/auth/slack/status`, { credentials: "include" }).then((r) => r.json()),
+      ]);
+      setConnectionStatus({ google: google.connected, slack: slack.connected });
+    } catch {
+      // silently ignore — demo mode doesn't need these endpoints
+    }
+  }, []);
+
+  // Fetch connection status when entering live mode
+  useEffect(() => {
+    if (mode === "live") {
+      fetchConnectionStatus();
+    }
+  }, [mode, fetchConnectionStatus]);
+
+  // Handle OAuth redirect back (?connected=google|slack or ?error=...)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("connected")) {
+      setMode("live");
+      fetchConnectionStatus();
+      window.history.replaceState({}, "", "/");
+    } else if (params.has("error")) {
+      window.history.replaceState({}, "", "/");
+    }
+  }, [fetchConnectionStatus]);
+
+  // After "Run first scan" mounts ExecutiveBrief, trigger the scan
+  useEffect(() => {
+    if (mode === "live" && liveScanned) {
+      briefRef.current?.handleRefresh?.();
+    }
+  }, [liveScanned, mode]);
+
+  const switchMode = (newMode) => {
+    if (newMode === mode) return;
+    if (newMode === "demo") setLiveScanned(false);
+    setMode(newMode);
+  };
+
   const handleManualClick = () => {
     customInputRef.current?.scrollIntoView({ behavior: "smooth" });
     setTimeout(() => {
@@ -53,12 +103,43 @@ export default function App() {
     briefRef.current?.handleRefresh?.();
   };
 
+  const gmailDot =
+    mode === "demo" || connectionStatus.google ? "bg-green-400" : "bg-zinc-500";
+
+  const slackDot =
+    mode === "demo" || connectionStatus.slack ? "bg-green-400" : "bg-zinc-500";
+
+  const showConnectSources = mode === "live" && !liveScanned;
+
   return (
     <div className="flex min-h-screen bg-zinc-950 text-zinc-100 font-sans">
-      {/* Sidebar */}
       <aside className="w-60 shrink-0 bg-zinc-950 border-r border-zinc-800 flex flex-col p-4 sticky top-0 h-screen">
-        <div className="text-sm font-semibold text-zinc-200 tracking-wide mb-6">
+        <div className="text-sm font-semibold text-zinc-200 tracking-wide mb-5">
           Operations Copilot
+        </div>
+
+        {/* Demo / Live toggle */}
+        <div className="flex rounded-md bg-zinc-900 border border-zinc-800 p-0.5 mb-5">
+          <button
+            className={`flex-1 text-xs py-1.5 rounded transition-colors font-medium ${
+              mode === "demo"
+                ? "bg-zinc-700 text-zinc-100"
+                : "text-zinc-500 hover:text-zinc-400"
+            }`}
+            onClick={() => switchMode("demo")}
+          >
+            Demo
+          </button>
+          <button
+            className={`flex-1 text-xs py-1.5 rounded transition-colors font-medium ${
+              mode === "live"
+                ? "bg-zinc-700 text-zinc-100"
+                : "text-zinc-500 hover:text-zinc-400"
+            }`}
+            onClick={() => switchMode("live")}
+          >
+            Live
+          </button>
         </div>
 
         <div className="flex flex-col gap-1 flex-1">
@@ -66,22 +147,48 @@ export default function App() {
             Sources
           </p>
 
-          <SourcePill label="Gmail" dot="bg-green-400">
-            <p className="text-xs text-zinc-500 mb-1 px-1">Recent threads</p>
-            {recentEmails.map((s, i) => (
-              <p key={i} className="text-xs text-zinc-300 px-1 py-0.5 truncate">
-                {s}
+          <SourcePill label="Gmail" dot={gmailDot}>
+            {mode === "demo" ? (
+              <>
+                <p className="text-xs text-zinc-500 mb-1 px-1">Recent threads</p>
+                {recentEmails.map((s, i) => (
+                  <p key={i} className="text-xs text-zinc-300 px-1 py-0.5 truncate">
+                    {s}
+                  </p>
+                ))}
+              </>
+            ) : connectionStatus.google ? (
+              <p className="text-xs text-zinc-300 px-1">Connected</p>
+            ) : (
+              <p className="text-xs text-zinc-500 px-1">
+                Not connected.{" "}
+                <a href={`${API}/api/auth/google`} className="text-indigo-400 hover:underline">
+                  Connect
+                </a>
               </p>
-            ))}
+            )}
           </SourcePill>
 
-          <SourcePill label="Slack" dot="bg-green-400">
-            <p className="text-xs text-zinc-500 mb-1 px-1">Channels scanned</p>
-            {recentChannels.map((c, i) => (
-              <p key={i} className="text-xs text-zinc-300 px-1 py-0.5">
-                {c}
+          <SourcePill label="Slack" dot={slackDot}>
+            {mode === "demo" ? (
+              <>
+                <p className="text-xs text-zinc-500 mb-1 px-1">Channels scanned</p>
+                {recentChannels.map((c, i) => (
+                  <p key={i} className="text-xs text-zinc-300 px-1 py-0.5">
+                    {c}
+                  </p>
+                ))}
+              </>
+            ) : connectionStatus.slack ? (
+              <p className="text-xs text-zinc-300 px-1">Connected</p>
+            ) : (
+              <p className="text-xs text-zinc-500 px-1">
+                Not connected.{" "}
+                <a href={`${API}/api/auth/slack`} className="text-indigo-400 hover:underline">
+                  Connect
+                </a>
               </p>
-            ))}
+            )}
           </SourcePill>
 
           <SourcePill label="Manual Input" dot="bg-zinc-500" onClick={handleManualClick} />
@@ -89,19 +196,27 @@ export default function App() {
 
         <button
           onClick={handleScanNow}
-          className="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium py-2 px-4 rounded-md transition-colors mt-4"
+          disabled={showConnectSources}
+          className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-sm font-medium py-2 px-4 rounded-md transition-colors mt-4"
         >
           Scan now
         </button>
       </aside>
 
-      {/* Main panel */}
       <main className="flex-1 p-8 overflow-y-auto">
-        <ExecutiveBrief
-          ref={briefRef}
-          onAddToastRef={onAddToastRef}
-          customInputRef={customInputRef}
-        />
+        {showConnectSources ? (
+          <ConnectSources
+            connectionStatus={connectionStatus}
+            onRunScan={() => setLiveScanned(true)}
+          />
+        ) : (
+          <ExecutiveBrief
+            ref={briefRef}
+            mode={mode}
+            onAddToastRef={onAddToastRef}
+            customInputRef={customInputRef}
+          />
+        )}
       </main>
 
       <ToastStack addToastRef={onAddToastRef} />

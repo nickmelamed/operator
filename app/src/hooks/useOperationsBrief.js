@@ -1,52 +1,76 @@
 import { useState, useEffect, useCallback } from "react";
-import messages from "../data/scenario.js";
+import scenarioMessages from "../data/scenario.js";
 
 const API = "http://localhost:3001";
 
-export function useOperationsBrief() {
+export function useOperationsBrief(mode = "demo") {
   const [signals, setSignals] = useState([]);
   const [actions, setActions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const runAnalyze = useCallback(async (msgs, customData) => {
-    const body = { messages: msgs };
-    if (customData) body.customData = customData;
+  const runAnalyze = useCallback(
+    async (msgs, customData) => {
+      const body = { messages: msgs, mode };
+      if (customData) body.customData = customData;
 
-    const res = await fetch(`${API}/api/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+      const res = await fetch(`${API}/api/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
 
-    if (!res.ok) throw new Error(await res.text());
-    return res.json();
-  }, []);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    [mode]
+  );
 
-  // Initial load
+  // Auto-load demo on mount; reset when mode changes
   useEffect(() => {
-    setLoading(true);
+    setSignals([]);
+    setActions([]);
     setError(null);
-    runAnalyze(messages)
+
+    if (mode !== "demo") {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+
+    runAnalyze(scenarioMessages)
       .then((data) => {
+        if (cancelled) return;
         setSignals(data.signals || []);
         setActions(
           (data.actions || []).map((a) => ({ ...a, sent: false, edited: false }))
         );
-        setLoading(false);
       })
       .catch((err) => {
+        if (cancelled) return;
         setError(err.message);
-        setLoading(false);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
-  }, [runAnalyze]);
 
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, runAnalyze]);
+
+  // No customText → full scan, replaces state. With customText → adds/dedupes.
   const refreshWithData = useCallback(
     async (customText) => {
       setLoading(true);
       setError(null);
       try {
-        const data = await runAnalyze(messages, customText || undefined);
+        const msgs = mode === "demo" ? scenarioMessages : [];
+        const data = await runAnalyze(msgs, customText || undefined);
+
         const newSignals = (data.signals || []).map((s) =>
           customText ? { ...s, source: "manual" } : s
         );
@@ -56,24 +80,26 @@ export function useOperationsBrief() {
           edited: false,
         }));
 
-        setSignals((prev) => {
-          const existingTitles = new Set(prev.map((s) => s.title));
-          const deduped = newSignals.filter((s) => !existingTitles.has(s.title));
-          return [...prev, ...deduped];
-        });
-
-        setActions((prev) => {
-          const existingIds = new Set(prev.map((a) => a.id));
-          const deduped = newActions.filter((a) => !existingIds.has(a.id));
-          return [...prev, ...deduped];
-        });
+        if (customText) {
+          setSignals((prev) => {
+            const existingTitles = new Set(prev.map((s) => s.title));
+            return [...prev, ...newSignals.filter((s) => !existingTitles.has(s.title))];
+          });
+          setActions((prev) => {
+            const existingIds = new Set(prev.map((a) => a.id));
+            return [...prev, ...newActions.filter((a) => !existingIds.has(a.id))];
+          });
+        } else {
+          setSignals(newSignals);
+          setActions(newActions);
+        }
       } catch (err) {
         setError(err.message);
       } finally {
         setLoading(false);
       }
     },
-    [runAnalyze]
+    [mode, runAnalyze]
   );
 
   const sendAction = useCallback(async (action) => {
@@ -83,6 +109,7 @@ export function useOperationsBrief() {
         res = await fetch(`${API}/api/send-email`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({
             to: action.to,
             subject: action.subject,
@@ -93,6 +120,7 @@ export function useOperationsBrief() {
         res = await fetch(`${API}/api/send-slack`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ channel: action.to, body: action.draft }),
         });
       }
@@ -128,6 +156,7 @@ export function useOperationsBrief() {
         const res = await fetch(`${API}/api/regenerate-draft`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({
             signalSummary: signal?.summary ?? "",
             channel: action.channel,
@@ -140,9 +169,7 @@ export function useOperationsBrief() {
         if (data.draft) {
           setActions((prev) =>
             prev.map((a) =>
-              a.id === actionId
-                ? { ...a, draft: data.draft, edited: false }
-                : a
+              a.id === actionId ? { ...a, draft: data.draft, edited: false } : a
             )
           );
         }

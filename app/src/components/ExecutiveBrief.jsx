@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, forwardRef, useImperativeHandle } from "react";
 import { useOperationsBrief } from "../hooks/useOperationsBrief.js";
 import { meta } from "../data/scenario.js";
 import SignalCard from "./SignalCard.jsx";
@@ -27,13 +27,18 @@ function SkeletonAction() {
   );
 }
 
-export default function ExecutiveBrief({ onAddToastRef, customInputRef }) {
+const ExecutiveBrief = forwardRef(function ExecutiveBrief(
+  { mode = "demo", onAddToastRef, customInputRef },
+  ref
+) {
   const { signals, actions, loading, error, refreshWithData, sendAction, updateDraft, regenerateDraft } =
-    useOperationsBrief();
+    useOperationsBrief(mode);
   const [customText, setCustomText] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
 
   const handleRefresh = () => refreshWithData("");
+
+  useImperativeHandle(ref, () => ({ handleRefresh }));
 
   const handleAnalyze = async () => {
     if (!customText.trim()) return;
@@ -78,7 +83,7 @@ export default function ExecutiveBrief({ onAddToastRef, customInputRef }) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <p className="text-zinc-300 text-lg font-medium animate-pulse">
-          {meta.businessName}
+          {mode === "demo" ? meta.businessName : "Your business"}
         </p>
         <p className="text-zinc-500 text-sm">
           Watching your business. First brief will be ready shortly.
@@ -93,10 +98,10 @@ export default function ExecutiveBrief({ onAddToastRef, customInputRef }) {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-xl font-semibold text-zinc-100">
-            {meta.businessName} — Monday Brief
+            {mode === "demo" ? `${meta.businessName} — Monday Brief` : "Live Brief"}
           </h1>
           <p className="text-sm text-zinc-500 mt-1">
-            Last scanned: {meta.scanTime}
+            {mode === "demo" ? `Last scanned: ${meta.scanTime}` : "Your connected sources"}
           </p>
         </div>
         <button
@@ -183,4 +188,6 @@ export default function ExecutiveBrief({ onAddToastRef, customInputRef }) {
       </section>
     </div>
   );
-}
+});
+
+export default ExecutiveBrief;
