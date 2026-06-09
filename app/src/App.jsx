@@ -16,12 +16,13 @@ const recentChannels = [
   ...new Set(messages.filter((m) => m.source === "slack").map((m) => m.channel)),
 ].slice(0, 3);
 
-function SourcePill({ label, dot, children, onClick }) {
+function SourcePill({ label, dot, children, onClick, buttonRef }) {
   const [open, setOpen] = useState(false);
 
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-md hover:bg-zinc-800 transition-colors text-sm text-zinc-300"
         onClick={() => {
           setOpen((v) => !v);
@@ -50,6 +51,8 @@ export default function App() {
   const briefRef = useRef(null);
   const customInputRef = useRef(null);
   const onAddToastRef = useRef(null);
+  const gmailPillRef = useRef(null);
+  const slackPillRef = useRef(null);
 
   const [mode, setMode] = useState("demo");
   const [connectionStatus, setConnectionStatus] = useState({ google: false, slack: false });
@@ -168,7 +171,7 @@ export default function App() {
             Sources
           </p>
 
-          <SourcePill label="Gmail" dot={gmailDot}>
+          <SourcePill label="Gmail" dot={gmailDot} buttonRef={gmailPillRef}>
             {mode === "demo" ? (
               <>
                 <p className="text-xs text-zinc-500 mb-1 px-1">Recent threads</p>
@@ -194,7 +197,7 @@ export default function App() {
             )}
           </SourcePill>
 
-          <SourcePill label="Slack" dot={slackDot}>
+          <SourcePill label="Slack" dot={slackDot} buttonRef={slackPillRef}>
             {mode === "demo" ? (
               <>
                 <p className="text-xs text-zinc-500 mb-1 px-1">Channels scanned</p>
@@ -247,6 +250,8 @@ export default function App() {
           <DemoReplay
             onManualInputActive={() => setManualInputActive(true)}
             onDemoReset={() => setManualInputActive(false)}
+            gmailPillRef={gmailPillRef}
+            slackPillRef={slackPillRef}
           />
         ) : (
           <ExecutiveBrief
