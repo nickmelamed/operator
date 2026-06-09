@@ -9,7 +9,7 @@ router.get("/", (req, res) => {
   const params = new URLSearchParams({
     client_id: process.env.SLACK_CLIENT_ID,
     redirect_uri: process.env.SLACK_REDIRECT_URI,
-    scope: "channels:read,channels:history,users:read",
+    scope: "channels:read,channels:history,users:read,chat:write",
   });
   res.redirect(`${SLACK_AUTH_URL}?${params}`);
 });
