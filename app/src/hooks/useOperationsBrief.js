@@ -86,8 +86,16 @@ export function useOperationsBrief(mode = "demo", { onFetchStatus } = {}) {
 
         if (customText) {
           setSignals((prev) => {
-            const existingTitles = new Set(prev.map((s) => s.title));
-            return [...prev, ...newSignals.filter((s) => !existingTitles.has(s.title))];
+            const newByTitle = new Map(newSignals.map((s) => [s.title, s]));
+            const merged = prev.map((s) => {
+              const updated = newByTitle.get(s.title);
+              if (updated) {
+                newByTitle.delete(s.title);
+                return { ...updated, manualUpdate: true };
+              }
+              return s;
+            });
+            return [...merged, ...[...newByTitle.values()]];
           });
           setActions((prev) => {
             const existingIds = new Set(prev.map((a) => a.id));

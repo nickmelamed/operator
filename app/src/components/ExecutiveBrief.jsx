@@ -128,7 +128,7 @@ const ExecutiveBrief = forwardRef(function ExecutiveBrief(
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {signals.map((signal) => (
-              <SignalCard key={signal.id} signal={signal} />
+              <SignalCard key={signal.id} signal={signal} manualUpdate={!!signal.manualUpdate} />
             ))}
           </div>
         )}
