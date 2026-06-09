@@ -250,6 +250,7 @@ export default function App() {
           <DemoReplay
             onManualInputActive={() => setManualInputActive(true)}
             onDemoReset={() => setManualInputActive(false)}
+            onSwitchToLive={() => switchMode("live")}
             gmailPillRef={gmailPillRef}
             slackPillRef={slackPillRef}
           />

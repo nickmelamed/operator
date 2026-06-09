@@ -82,7 +82,7 @@ function scrollToElement(el) {
   el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-// ── Overlay components (all rendered via portal to document.body) ──────────
+// ── Overlay components (rendered via portal to document.body) ──────────────
 
 function WelcomeOverlay({ onStart }) {
   return (
@@ -117,7 +117,6 @@ function SpotlightOverlay({ rects, message }) {
 
   return (
     <>
-      {/* Spotlight cutout via box-shadow trick */}
       <div
         style={{
           position: "fixed",
@@ -132,7 +131,6 @@ function SpotlightOverlay({ rects, message }) {
           border: "1.5px solid rgba(99,102,241,0.5)",
         }}
       />
-      {/* Callout tooltip to the right of the sidebar */}
       <div
         style={{
           position: "fixed",
@@ -144,7 +142,6 @@ function SpotlightOverlay({ rects, message }) {
         }}
         className="bg-zinc-800 border border-indigo-500/40 rounded-xl px-4 py-3 shadow-xl"
       >
-        {/* Arrow pointing left toward spotlight */}
         <div
           style={{
             position: "absolute",
@@ -177,23 +174,43 @@ function StepCallout({ message }) {
   );
 }
 
-function FinaleOverlay() {
+function FinaleOverlay({ onLive }) {
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center bg-zinc-950/90 backdrop-blur-sm pointer-events-none">
+    <div className="fixed inset-0 z-60 flex items-center justify-center bg-zinc-950/90 backdrop-blur-sm">
       <div className="text-center max-w-sm px-8">
         <h2 className="text-2xl font-bold text-white mb-3">Excited?</h2>
-        <p className="text-zinc-300 text-lg leading-relaxed">
+        <p className="text-zinc-300 text-lg leading-relaxed mb-8">
           Try it out with your own data on the{" "}
           <span className="text-indigo-400 font-semibold">Live Tab</span>
         </p>
+        <button
+          onClick={onLive}
+          className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 px-8 rounded-lg transition-colors text-sm"
+        >
+          Switch to Live →
+        </button>
       </div>
     </div>
   );
 }
 
+function ExitButton({ onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label="Exit demo"
+      className="fixed top-4 right-4 z-70 flex items-center justify-center w-8 h-8 rounded-full bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors shadow-lg"
+    >
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    </button>
+  );
+}
+
 // ── Main component ──────────────────────────────────────────────────────────
 
-export default function DemoReplay({ onManualInputActive, onDemoReset, gmailPillRef, slackPillRef }) {
+export default function DemoReplay({ onManualInputActive, onDemoReset, onSwitchToLive, gmailPillRef, slackPillRef }) {
   const [phase, setPhase] = useState("ready");
   const [manualText, setManualText] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -202,15 +219,53 @@ export default function DemoReplay({ onManualInputActive, onDemoReset, gmailPill
   const [clickingAction, setClickingAction] = useState(null);
   const [modalAction, setModalAction] = useState(null);
   const [overlayState, setOverlayState] = useState({ type: "welcome" });
+  const [demoActive, setDemoActive] = useState(false);
 
   const actionsRef = useRef(null);
   const manualInputRef = useRef(null);
   const signalsRef = useRef(null);
   const hasStarted = useRef(false);
+  const abortSignalRef = useRef(null);
+  const postAbortCallbackRef = useRef(null);
+
+  // A sleep that can be cancelled by calling abortSignalRef.current().
+  const cancellableSleep = (ms) =>
+    new Promise((resolve, reject) => {
+      const id = setTimeout(resolve, ms);
+      abortSignalRef.current = () => {
+        clearTimeout(id);
+        const e = new Error("aborted");
+        e.name = "AbortError";
+        reject(e);
+      };
+    });
+
+  const triggerAbort = () => {
+    if (abortSignalRef.current) {
+      abortSignalRef.current();
+      abortSignalRef.current = null;
+    }
+  };
+
+  // Call to abort an in-progress demo; afterAbort runs once cleanup is done.
+  const handleAbort = (afterAbort) => {
+    postAbortCallbackRef.current = afterAbort ?? null;
+    triggerAbort();
+  };
+
+  // Works from both the welcome screen (demo not yet started) and mid-demo.
+  const handleExit = () => {
+    if (hasStarted.current) {
+      handleAbort(onSwitchToLive);
+    } else {
+      onSwitchToLive?.();
+    }
+  };
 
   const runDemo = async () => {
     if (hasStarted.current) return;
     hasStarted.current = true;
+    setDemoActive(true);
 
     const blockScroll = (e) => e.preventDefault();
     const main = document.querySelector("main");
@@ -221,10 +276,19 @@ export default function DemoReplay({ onManualInputActive, onDemoReset, gmailPill
     window.addEventListener("wheel", blockScroll, { passive: false });
     window.addEventListener("touchmove", blockScroll, { passive: false });
 
+    const unlock = () => {
+      if (main) {
+        main.removeEventListener("wheel", blockScroll);
+        main.removeEventListener("touchmove", blockScroll);
+      }
+      window.removeEventListener("wheel", blockScroll);
+      window.removeEventListener("touchmove", blockScroll);
+    };
+
     try {
       // 0 — dismiss welcome, spotlight Gmail + Slack in the sidebar
       setOverlayState(null);
-      await sleep(300);
+      await cancellableSleep(300);
 
       const gmailRect = gmailPillRef?.current?.getBoundingClientRect();
       const slackRect = slackPillRef?.current?.getBoundingClientRect();
@@ -236,86 +300,86 @@ export default function DemoReplay({ onManualInputActive, onDemoReset, gmailPill
           rects: spotlightRects,
           message: "After integrating Gmail & Slack, here's your Operations Dashboard",
         });
-        await sleep(3200);
+        await cancellableSleep(3200);
         setOverlayState(null);
-        await sleep(400);
+        await cancellableSleep(400);
       }
 
       setPhase("running");
 
       // 1 — show full page by scrolling to bottom
       scrollToBottom();
-      await sleep(2500);
+      await cancellableSleep(2500);
 
       // 2 — scroll to manual input textarea
       scrollToElement(manualInputRef.current);
-      await sleep(1000);
+      await cancellableSleep(1000);
 
       setOverlayState({
         type: "callout",
         message: "Add meeting notes or emails — the AI enriches your signals automatically",
       });
-      await sleep(1400);
+      await cancellableSleep(1400);
 
       // 3 — type meeting notes character by character
       setPhase("typing");
       for (let i = 1; i <= MANUAL_INPUT_TEXT.length; i++) {
         setManualText(MANUAL_INPUT_TEXT.slice(0, i));
-        await sleep(12);
+        await sleep(12); // fast typing; use non-cancellable sleep for smooth animation
       }
-      await sleep(600);
+      await cancellableSleep(600);
 
       // 4 — fake "Analyze" submission
       setIsAnalyzing(true);
       setOverlayState({ type: "callout", message: "Analyzing your input alongside Gmail & Slack data…" });
       onManualInputActive?.();
-      await sleep(1800);
+      await cancellableSleep(1800);
       setIsAnalyzing(false);
       setOverlayState(null);
 
       // 5 — scroll up to signal cards and show updated Acme Corp card
       setPhase("card_update");
       scrollToElement(signalsRef.current);
-      await sleep(900);
+      await cancellableSleep(900);
       setSignals((prev) => prev.map((s) => (s.id === "sig-acme" ? UPDATED_ACME_SIGNAL : s)));
       setOverlayState({ type: "callout", message: "Signal updated with context from your meeting notes" });
-      await sleep(2200);
+      await cancellableSleep(2200);
       setOverlayState(null);
 
       // 6 — scroll to recommended actions
       setPhase("actions");
       scrollToElement(actionsRef.current);
       setOverlayState({ type: "callout", message: "AI drafts the right message for each action — one click to send" });
-      await sleep(1500);
+      await cancellableSleep(1500);
       setOverlayState(null);
 
       // 7 — "click" action 1: Send proposal to Acme Corp
       setClickingAction("act-acme");
-      await sleep(500);
+      await cancellableSleep(500);
       setModalAction(DEMO_ACTIONS[0]);
-      await sleep(5000);
+      await cancellableSleep(5000);
       setModalAction(null);
       setClickingAction(null);
       setHiddenActions((prev) => [...prev, "act-acme"]);
-      await sleep(2000);
+      await cancellableSleep(2000);
 
       // 8 — "click" action 3: Follow up with Project Falcon
       setClickingAction("act-falcon");
-      await sleep(500);
+      await cancellableSleep(500);
       setModalAction(DEMO_ACTIONS[2]);
-      await sleep(5000);
+      await cancellableSleep(5000);
       setModalAction(null);
       setClickingAction(null);
       setHiddenActions((prev) => [...prev, "act-falcon"]);
-      await sleep(2000);
+      await cancellableSleep(2000);
 
       // 9 — finale
       setOverlayState({ type: "finale" });
-      await sleep(4000);
+      await cancellableSleep(4000);
 
       // 10 — scroll back to top, then reset to initial state
       scrollToTop();
-      await sleep(1000);
+      await cancellableSleep(1000);
 
       setPhase("ready");
       setManualText("");
@@ -324,16 +388,32 @@ export default function DemoReplay({ onManualInputActive, onDemoReset, gmailPill
       setHiddenActions([]);
       setClickingAction(null);
       setModalAction(null);
-      hasStarted.current = false;
+      setDemoActive(false);
       onDemoReset?.();
-      setOverlayState({ type: "welcome" });
+      setOverlayState(null);
+
+    } catch (e) {
+      if (e?.name !== "AbortError") throw e;
+
+      // Aborted: clean up all state without showing welcome again — the
+      // post-abort callback (e.g. onSwitchToLive) handles navigation.
+      setPhase("ready");
+      setManualText("");
+      setIsAnalyzing(false);
+      setSignals(DEMO_SIGNALS);
+      setHiddenActions([]);
+      setClickingAction(null);
+      setModalAction(null);
+      setDemoActive(false);
+      setOverlayState(null);
+      onDemoReset?.();
+      postAbortCallbackRef.current?.();
+      postAbortCallbackRef.current = null;
+
     } finally {
-      if (main) {
-        main.removeEventListener("wheel", blockScroll);
-        main.removeEventListener("touchmove", blockScroll);
-      }
-      window.removeEventListener("wheel", blockScroll);
-      window.removeEventListener("touchmove", blockScroll);
+      unlock();
+      hasStarted.current = false;
+      abortSignalRef.current = null;
     }
   };
 
@@ -350,12 +430,22 @@ export default function DemoReplay({ onManualInputActive, onDemoReset, gmailPill
           </h1>
           <p className="text-sm text-zinc-500 mt-1">Last scanned: 2 minutes ago</p>
         </div>
-        {isRunning && (
+        {!demoActive && !isRunning ? (
+          <button
+            onClick={runDemo}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium py-2 px-4 rounded-md transition-colors"
+          >
+            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+            Start Demo
+          </button>
+        ) : isRunning ? (
           <span className="text-xs text-indigo-400 flex items-center gap-1.5 py-2 px-3 bg-indigo-500/10 rounded-md border border-indigo-500/20">
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
             Demo running
           </span>
-        )}
+        ) : null}
       </div>
 
       {/* Signal cards */}
@@ -418,18 +508,21 @@ export default function DemoReplay({ onManualInputActive, onDemoReset, gmailPill
       {modalAction && <MessageModal action={modalAction} />}
 
       {/* Overlay portal */}
-      {overlayState &&
-        createPortal(
-          <>
-            {overlayState.type === "welcome" && <WelcomeOverlay onStart={runDemo} />}
-            {overlayState.type === "spotlight" && (
-              <SpotlightOverlay rects={overlayState.rects} message={overlayState.message} />
-            )}
-            {overlayState.type === "callout" && <StepCallout message={overlayState.message} />}
-            {overlayState.type === "finale" && <FinaleOverlay />}
-          </>,
-          document.body
-        )}
+      {createPortal(
+        <>
+          {overlayState?.type === "welcome" && <WelcomeOverlay onStart={runDemo} />}
+          {overlayState?.type === "spotlight" && (
+            <SpotlightOverlay rects={overlayState.rects} message={overlayState.message} />
+          )}
+          {overlayState?.type === "callout" && <StepCallout message={overlayState.message} />}
+          {overlayState?.type === "finale" && (
+            <FinaleOverlay onLive={() => handleAbort(onSwitchToLive)} />
+          )}
+          {/* Exit button: visible from when demo starts until it resets to welcome */}
+          {demoActive && <ExitButton onClick={handleExit} />}
+        </>,
+        document.body
+      )}
     </div>
   );
 }
