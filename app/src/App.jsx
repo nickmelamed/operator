@@ -245,8 +245,8 @@ export default function App() {
           />
         ) : mode === "demo" ? (
           <DemoReplay
-            onDemoComplete={() => switchMode("live")}
             onManualInputActive={() => setManualInputActive(true)}
+            onDemoReset={() => setManualInputActive(false)}
           />
         ) : (
           <ExecutiveBrief

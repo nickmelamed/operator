@@ -51,26 +51,39 @@ function DemoActionCard({ action, clicking }) {
   );
 }
 
-function scrollContainer() {
-  return document.querySelector("main");
+// Returns whichever of <main> or window is actually scrolling this page.
+function getScroller() {
+  const main = document.querySelector("main");
+  if (main && main.scrollHeight > main.clientHeight + 4) return main;
+  return window;
+}
+
+function scrollerScrollTo(options) {
+  const s = getScroller();
+  s.scrollTo(options);
+}
+
+function scrollerScrollHeight() {
+  const s = getScroller();
+  if (s === window) return document.body.scrollHeight;
+  return s.scrollHeight;
 }
 
 function scrollToBottom() {
-  const c = scrollContainer();
-  if (c) c.scrollTo({ top: c.scrollHeight, behavior: "smooth" });
+  scrollerScrollTo({ top: scrollerScrollHeight(), behavior: "smooth" });
+}
+
+function scrollToTop() {
+  scrollerScrollTo({ top: 0, behavior: "smooth" });
 }
 
 function scrollToElement(el) {
   if (!el) return;
-  const c = scrollContainer();
-  if (!c) return;
-  const elRect = el.getBoundingClientRect();
-  const cRect = c.getBoundingClientRect();
-  const newTop = c.scrollTop + (elRect.top - cRect.top) - 80;
-  c.scrollTo({ top: Math.max(0, newTop), behavior: "smooth" });
+  // scrollIntoView finds the nearest scrollable ancestor automatically.
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-export default function DemoReplay({ onDemoComplete, onManualInputActive }) {
+export default function DemoReplay({ onManualInputActive, onDemoReset }) {
   const [phase, setPhase] = useState("ready");
   const [manualText, setManualText] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -87,64 +100,94 @@ export default function DemoReplay({ onDemoComplete, onManualInputActive }) {
   const runDemo = async () => {
     if (hasStarted.current) return;
     hasStarted.current = true;
-
     setPhase("running");
 
-    // 1 — scroll down so viewer sees the full page
-    scrollToBottom();
-    await sleep(2500);
-
-    // 2 — scroll to manual input textarea
-    scrollToElement(manualInputRef.current);
-    await sleep(1000);
-
-    // 3 — type meeting notes character by character
-    setPhase("typing");
-    for (let i = 1; i <= MANUAL_INPUT_TEXT.length; i++) {
-      setManualText(MANUAL_INPUT_TEXT.slice(0, i));
-      await sleep(12);
+    // Lock scrolling — prevent user from scrolling during demo
+    const blockScroll = (e) => e.preventDefault();
+    const main = document.querySelector("main");
+    if (main) {
+      main.addEventListener("wheel", blockScroll, { passive: false });
+      main.addEventListener("touchmove", blockScroll, { passive: false });
     }
-    await sleep(600);
+    window.addEventListener("wheel", blockScroll, { passive: false });
+    window.addEventListener("touchmove", blockScroll, { passive: false });
 
-    // 4 — fake "Analyze" submission
-    setIsAnalyzing(true);
-    onManualInputActive?.();
-    await sleep(1800);
-    setIsAnalyzing(false);
+    try {
+      // 1 — show full page by scrolling to bottom
+      scrollToBottom();
+      await sleep(2500);
 
-    // 5 — scroll up to signal cards and update Acme Corp card
-    setPhase("card_update");
-    scrollToElement(signalsRef.current);
-    await sleep(900);
-    setSignals((prev) => prev.map((s) => (s.id === "sig-acme" ? UPDATED_ACME_SIGNAL : s)));
-    await sleep(2200);
+      // 2 — scroll to manual input textarea
+      scrollToElement(manualInputRef.current);
+      await sleep(1000);
 
-    // 6 — scroll to recommended actions
-    setPhase("actions");
-    scrollToElement(actionsRef.current);
-    await sleep(1500);
+      // 3 — type meeting notes character by character
+      setPhase("typing");
+      for (let i = 1; i <= MANUAL_INPUT_TEXT.length; i++) {
+        setManualText(MANUAL_INPUT_TEXT.slice(0, i));
+        await sleep(12);
+      }
+      await sleep(600);
 
-    // 7 — "click" action 1: Send proposal to Acme Corp
-    setClickingAction("act-acme");
-    await sleep(500);
-    setModalAction(DEMO_ACTIONS[0]);
-    await sleep(5000);
-    setModalAction(null);
-    setClickingAction(null);
-    setHiddenActions((prev) => [...prev, "act-acme"]);
-    await sleep(2000);
+      // 4 — fake "Analyze" submission
+      setIsAnalyzing(true);
+      onManualInputActive?.();
+      await sleep(1800);
+      setIsAnalyzing(false);
 
-    // 8 — "click" action 3: Follow up with Project Falcon
-    setClickingAction("act-falcon");
-    await sleep(500);
-    setModalAction(DEMO_ACTIONS[2]);
-    await sleep(5000);
-    setModalAction(null);
-    setClickingAction(null);
-    setHiddenActions((prev) => [...prev, "act-falcon"]);
-    await sleep(2000);
+      // 5 — scroll up to signal cards and show updated Acme Corp card
+      setPhase("card_update");
+      scrollToElement(signalsRef.current);
+      await sleep(900);
+      setSignals((prev) => prev.map((s) => (s.id === "sig-acme" ? UPDATED_ACME_SIGNAL : s)));
+      await sleep(2200);
 
-    onDemoComplete?.();
+      // 6 — scroll to recommended actions
+      setPhase("actions");
+      scrollToElement(actionsRef.current);
+      await sleep(1500);
+
+      // 7 — "click" action 1: Send proposal to Acme Corp
+      setClickingAction("act-acme");
+      await sleep(500);
+      setModalAction(DEMO_ACTIONS[0]);
+      await sleep(5000);
+      setModalAction(null);
+      setClickingAction(null);
+      setHiddenActions((prev) => [...prev, "act-acme"]);
+      await sleep(2000);
+
+      // 8 — "click" action 3: Follow up with Project Falcon
+      setClickingAction("act-falcon");
+      await sleep(500);
+      setModalAction(DEMO_ACTIONS[2]);
+      await sleep(5000);
+      setModalAction(null);
+      setClickingAction(null);
+      setHiddenActions((prev) => [...prev, "act-falcon"]);
+      await sleep(2000);
+
+      // 9 — scroll back to top, then reset to initial state
+      scrollToTop();
+      await sleep(1000);
+
+      setPhase("ready");
+      setManualText("");
+      setIsAnalyzing(false);
+      setSignals(DEMO_SIGNALS);
+      setHiddenActions([]);
+      setClickingAction(null);
+      setModalAction(null);
+      hasStarted.current = false;
+      onDemoReset?.();
+    } finally {
+      if (main) {
+        main.removeEventListener("wheel", blockScroll);
+        main.removeEventListener("touchmove", blockScroll);
+      }
+      window.removeEventListener("wheel", blockScroll);
+      window.removeEventListener("touchmove", blockScroll);
+    }
   };
 
   const visibleActions = DEMO_ACTIONS.filter((a) => !hiddenActions.includes(a.id));
