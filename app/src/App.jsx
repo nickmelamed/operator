@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import ExecutiveBrief from "./components/ExecutiveBrief.jsx";
+import DemoReplay from "./components/DemoReplay.jsx";
 import ConnectSources from "./components/ConnectSources.jsx";
 import ToastStack from "./components/ToastStack.jsx";
 import messages from "./data/scenario.js";
@@ -54,6 +55,7 @@ export default function App() {
   const [connectionStatus, setConnectionStatus] = useState({ google: false, slack: false });
   const [fetchStatus, setFetchStatus] = useState({ gmail: null, slack: null });
   const [liveScanned, setLiveScanned] = useState(false);
+  const [manualInputActive, setManualInputActive] = useState(false);
 
   const fetchConnectionStatus = useCallback(async () => {
     try {
@@ -99,6 +101,7 @@ export default function App() {
       setLiveScanned(false);
       setFetchStatus({ gmail: null, slack: null });
     }
+    setManualInputActive(false);
     setMode(newMode);
   };
 
@@ -217,7 +220,11 @@ export default function App() {
             )}
           </SourcePill>
 
-          <SourcePill label="Manual Input" dot="bg-zinc-500" onClick={handleManualClick} />
+          <SourcePill
+            label="Manual Input"
+            dot={manualInputActive ? "bg-green-400" : "bg-zinc-500"}
+            onClick={handleManualClick}
+          />
         </div>
 
         <button
@@ -235,6 +242,11 @@ export default function App() {
             connectionStatus={connectionStatus}
             onRunScan={() => setLiveScanned(true)}
             onConnectionChange={fetchConnectionStatus}
+          />
+        ) : mode === "demo" ? (
+          <DemoReplay
+            onDemoComplete={() => switchMode("live")}
+            onManualInputActive={() => setManualInputActive(true)}
           />
         ) : (
           <ExecutiveBrief

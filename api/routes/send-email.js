@@ -8,9 +8,15 @@ router.post("/", async (req, res) => {
   try {
     const { to, subject, body } = req.body;
 
-    const response = await client.messages.create({
+    const accessToken = req.session?.googleTokens?.access_token;
+    if (!accessToken) {
+      return res.status(401).json({ error: "Not authenticated with Google" });
+    }
+
+    const response = await client.beta.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 500,
+      betas: ["mcp-client-2025-04-04"],
       system:
         "You are a mail-sending assistant. Use the Gmail tool to send exactly the email provided. Do not modify the content. Do not add any additional commentary.",
       mcp_servers: [
@@ -18,6 +24,7 @@ router.post("/", async (req, res) => {
           type: "url",
           url: "https://gmailmcp.googleapis.com/mcp/v1",
           name: "gmail-mcp",
+          authorization_token: accessToken,
         },
       ],
       messages: [

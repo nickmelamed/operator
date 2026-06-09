@@ -39,7 +39,7 @@ const SOURCE_ICONS = {
   ),
 };
 
-export default function SignalCard({ signal }) {
+export default function SignalCard({ signal, manualUpdate = false }) {
   const styles = TYPE_STYLES[signal.type] || TYPE_STYLES.risk;
   const sourceLabel =
     signal.source === "gmail"
@@ -50,7 +50,11 @@ export default function SignalCard({ signal }) {
 
   return (
     <div
-      className={`bg-zinc-900 border border-zinc-800 border-l-4 ${styles.border} rounded-lg p-4 flex flex-col gap-2`}
+      className={`bg-zinc-900 border-l-4 rounded-lg p-4 flex flex-col gap-2 transition-all duration-500 ${
+        manualUpdate
+          ? "border border-yellow-400/50 border-l-yellow-400"
+          : `border border-zinc-800 ${styles.border}`
+      }`}
     >
       <div className="flex items-center gap-2">
         <span
@@ -73,11 +77,17 @@ export default function SignalCard({ signal }) {
         <p className="text-xs text-zinc-500">{signal.relatedContact}</p>
       )}
 
-      <div className="mt-auto pt-2">
+      <div className="mt-auto pt-2 flex flex-wrap gap-1.5">
         <span className="inline-flex items-center gap-1 text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-full">
           {SOURCE_ICONS[signal.source] || SOURCE_ICONS.manual}
           {sourceLabel}
         </span>
+        {manualUpdate && (
+          <span className="inline-flex items-center gap-1 text-xs text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full">
+            {SOURCE_ICONS.manual}
+            Manual
+          </span>
+        )}
       </div>
     </div>
   );

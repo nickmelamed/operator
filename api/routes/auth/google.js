@@ -15,7 +15,10 @@ router.get("/", (req, res) => {
   const oAuth2Client = getOAuthClient();
   const url = oAuth2Client.generateAuthUrl({
     access_type: "offline",
-    scope: ["https://www.googleapis.com/auth/gmail.readonly"],
+    scope: [
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.send",
+      ],
     prompt: "consent",
   });
   res.redirect(url);
